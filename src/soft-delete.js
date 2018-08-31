@@ -81,14 +81,18 @@ export default (Model, { deletedAt = 'deletedAt', scrub = false }) => {
 
   const _count = Model.count;
   Model.count = function countDeleted(where = {}, ...rest) {
-    // Because count only receives a 'where', there's nowhere to ask for the deleted entities.
-    let whereNotDeleted;
+    let newWhere;
     if (!where || Object.keys(where).length === 0) {
-      whereNotDeleted = queryNonDeleted;
+      newWhere = queryNonDeleted;
     } else {
-      whereNotDeleted = { and: [ where, queryNonDeleted ] };
+      if (where.deleted) {
+        delete where.deleted;
+        newWhere = where;
+      } else {
+        newWhere = { and: [ where, queryNonDeleted ] };
+      }
     }
-    return _count.call(Model, whereNotDeleted, ...rest);
+    return _count.call(Model, newWhere, ...rest);
   };
 
   const _update = Model.update;
