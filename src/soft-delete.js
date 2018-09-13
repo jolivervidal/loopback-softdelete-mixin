@@ -31,9 +31,30 @@ export default (Model, { deletedAt = 'deletedAt', scrub = false }) => {
   Model.deleteAll = Model.destroyAll;
 
   Model.destroyById = function softDestroyById(id, cb) {
-    return Model.updateAll({ [idName]: id }, { ...scrubbed, [deletedAt]: new Date()})
-      .then(result => (typeof cb === 'function') ? cb(null, result) : result)
-      .catch(error => (typeof cb === 'function') ? cb(error) : Promise.reject(error));
+    const context = {
+      Model: Model,
+      where: { id },
+      hookState: {},
+      options: {},
+    };
+
+    return Model.notifyObserversOf('before delete', context)
+      .then(() => {
+        return Model.updateAll({ [idName]: id }, { ...scrubbed, [deletedAt]: new Date() });
+      })
+      .then((result) => {
+        return Model.notifyObserversOf('after delete', context).then(() => {
+          if (typeof cb === 'function') {
+            cb(null, result);
+          }
+          return Promise.resolve(result);
+        });
+      })
+      .catch(error => {
+        if (typeof cb === 'function') {
+          cb(error);
+        }
+      });
   };
 
   Model.removeById = Model.destroyById;

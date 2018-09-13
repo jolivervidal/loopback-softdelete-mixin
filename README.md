@@ -9,7 +9,7 @@ Install
 -------
 
 ```bash
-  npm install --save loopback-softdelete-mixin2
+  npm install --save loopback-softdelete-mixin-with-count
 ```
 
 Configure
