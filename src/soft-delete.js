@@ -22,9 +22,35 @@ export default (Model, { deletedAt = 'deletedAt', scrub = false }) => {
   Model.defineProperty(deletedAt, {type: Date, required: false});
 
   Model.destroyAll = function softDestroyAll(where, cb) {
-    return Model.updateAll(where, { ...scrubbed, [deletedAt]: new Date() })
-      .then(result => (typeof cb === 'function') ? cb(null, result) : result)
-      .catch(error => (typeof cb === 'function') ? cb(error) : Promise.reject(error));
+    const context = {
+      Model,
+      where,
+      hookState: {},
+      options: {},
+    };
+
+    let deleted;
+    return Model.notifyObserversOf('before delete', context)
+      .then(() => {
+        return Model.find({ where, fields: ['id']}, { ...scrubbed, [deletedAt]: new Date() });
+      })
+      .then((instances) => {
+        deleted = instances.map(instance => instance.id);
+        return Model.updateAll(where, { ...scrubbed, [deletedAt]: new Date() });
+      })
+      .then((result) => {
+        return Model.notifyObserversOf('after delete', { ...context, deleted }).then(() => {
+          if (typeof cb === 'function') {
+            cb(null, result);
+          }
+          return Promise.resolve(result);
+        });
+      })
+      .catch(error => {
+        if (typeof cb === 'function') {
+          cb(error);
+        }
+      });
   };
 
   Model.remove = Model.destroyAll;
@@ -43,7 +69,7 @@ export default (Model, { deletedAt = 'deletedAt', scrub = false }) => {
         return Model.updateAll({ [idName]: id }, { ...scrubbed, [deletedAt]: new Date() });
       })
       .then((result) => {
-        return Model.notifyObserversOf('after delete', context).then(() => {
+        return Model.notifyObserversOf('after delete', { ...context, deleted: [id] }).then(() => {
           if (typeof cb === 'function') {
             cb(null, result);
           }
